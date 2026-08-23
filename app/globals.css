@@ -1,0 +1,334 @@
+@import "leaflet/dist/leaflet.css";
+
+:root {
+  --bg: #0b1220;
+  --panel: #131c2e;
+  --panel-raised: #182338;
+  --hairline: #24304a;
+  --text: #e8ecf4;
+  --text-muted: #7c8aa5;
+  --accent: #37d6c4;
+  --accent-dim: #1f6e66;
+  --accent-2: #f2b84b;
+  --danger: #f2555a;
+
+  --font-ui: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+}
+
+a {
+  color: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ---------- layout shell ---------- */
+
+.shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--hairline);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wordmark {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wordmark .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px rgba(55, 214, 196, 0.15);
+}
+
+.tagline {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 1px;
+  background: var(--hairline);
+}
+
+@media (max-width: 860px) {
+  .main {
+    grid-template-columns: 1fr;
+  }
+}
+
+.map-pane {
+  position: relative;
+  background: var(--bg);
+  min-height: 420px;
+}
+
+.map-pane .leaflet-container {
+  width: 100%;
+  height: 100%;
+  min-height: 420px;
+  background: #0e1626;
+}
+
+.side-pane {
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- control card ---------- */
+
+.control-card {
+  padding: 20px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.control-card h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin: 0 0 14px 0;
+  font-weight: 600;
+}
+
+.leg {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.leg .marker {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.leg .marker.pickup {
+  background: var(--accent-2);
+}
+
+.leg .marker.dropoff {
+  background: var(--accent);
+}
+
+.leg .label {
+  color: var(--text-muted);
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.leg .value {
+  color: var(--text);
+}
+
+button.primary {
+  width: 100%;
+  margin-top: 12px;
+  padding: 11px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--accent-dim);
+  background: linear-gradient(180deg, rgba(55, 214, 196, 0.16), rgba(55, 214, 196, 0.06));
+  color: var(--accent);
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+button.primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, rgba(55, 214, 196, 0.24), rgba(55, 214, 196, 0.1));
+}
+
+button.primary:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+button.primary:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+button.ghost {
+  width: 100%;
+  margin-top: 8px;
+  padding: 9px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--hairline);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+button.ghost:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.status-dot.active {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(55, 214, 196, 0.18);
+}
+
+.status-dot.done {
+  background: var(--accent-2);
+}
+
+/* ---------- console ---------- */
+
+.console {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.console h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin: 0;
+  padding: 20px 20px 12px 20px;
+  font-weight: 600;
+}
+
+.console-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 20px 20px 20px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.console-log .empty {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.log-line {
+  display: flex;
+  gap: 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.log-line .ts {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.log-line .tag {
+  flex-shrink: 0;
+}
+
+.log-line .tag.req {
+  color: var(--accent-2);
+}
+
+.log-line .tag.evt {
+  color: var(--accent);
+}
+
+.log-line .tag.err {
+  color: var(--danger);
+}
+
+.cursor {
+  display: inline-block;
+  width: 7px;
+  height: 13px;
+  background: var(--accent);
+  animation: blink 1s steps(1) infinite;
+  vertical-align: -2px;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ---------- leaflet marker overrides ---------- */
+
+.dl-vehicle-icon {
+  filter: drop-shadow(0 0 6px rgba(55, 214, 196, 0.6));
+}
+
+.dl-pin-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  background: var(--panel-raised);
+  color: var(--text);
+  border: 1px solid var(--hairline);
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
