@@ -41,5 +41,9 @@ IndexedDB queue, no PWA manifest — that's Phases 2–3. This phase is
 deliberately "boring plumbing only."
 
 **Where to resume:** Phase 2 (PWA + tile caching) in `pickme-build-prompt.md`.
-Nothing is pushed to GitHub or deployed to Vercel yet — that's on you (see
-README for the exact steps), since this tool can't do it directly.
+
+### 2026-08-24 — Deployment complete
+- GitHub repo created: https://github.com/shanujans/pickme (private)
+- Vercel deployment live: https://pickme-ruby.vercel.app
+- Build passed on Vercel with no errors
+- Ready for Phase 2 (PWA + tile caching)
