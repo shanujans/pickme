@@ -3,7 +3,7 @@
 ## Track A — Offline Map
 - [x] Phase 1: Foundation
 - [x] Phase 2: PWA + tile caching
-- [ ] Phase 3: Offline state sync
+- [x] Phase 3: Offline state sync
 - [ ] Phase 4: Packaging
 
 ## Track B — WhatsApp Voice Booking Bot
@@ -14,6 +14,73 @@
 
 ## Decisions log
 (most recent first — record tool used, what was built, choices made, what's next)
+
+### 2026-08-25 — Claude.ai — Phase 3 complete
+Cloned the repo to check state before starting — no drift from Phase 2,
+matches this file. Note: `pickme-build-prompt.md`, referenced below as
+"where to resume," isn't actually in the repo (only SKILL.md, README.md,
+PROGRESS.md are). Built this phase off SKILL.md's Pattern A architecture
+instead, which was detailed enough on its own. Worth checking whether
+that file exists locally and just never got committed — if it has
+phase-specific "done when" criteria beyond what's below, Phase 4 should
+start from those instead.
+
+Built:
+- `lib/eventQueue.ts`: the offline event queue. `enqueueEvent()` writes
+  optimistically to IndexedDB (via the `idb` package) and returns
+  instantly; `flushQueue()` replays pending events oldest-first and stops
+  at the first failure so a later event can never land before an earlier
+  one (location updates are meaningless out of order). Reconnect
+  (`window`'s `online` event) and a manual `setSimulateOffline()` toggle
+  both trigger a flush attempt.
+- Each queued event carries a client-generated `id` (idempotency key).
+- `app/api/trip-events/route.ts`: added dedup on that `id` via an
+  in-memory `seen` map — a retried event (flaky reconnect, response lost
+  after the server actually received it) comes back as a harmless
+  `duplicate: true` instead of being processed twice. In-memory only,
+  noted in the code as demo-grade, not a real datastore.
+- `app/page.tsx`: replaced the direct `fetch` calls in `handleEvent` with
+  `enqueueEvent`; added a "Sync queue" card with live pending/synced
+  counts and a "Simulate offline" button — addresses the SKILL.md
+  pitfall about `navigator.onLine` alone being unreliable for a live
+  demo. This is a functional readout only, not the polished "glanceable"
+  sync-status badge the packaging checklist calls for — that's still
+  Phase 4's job, this just makes the mechanism visible/testable now.
+- `components/TripConsole.tsx` / `globals.css`: added a `sync` log tag
+  (amber) for queue transitions, distinct from `req`/`evt`/`err`.
+
+**Bug caught by testing, fixed before committing:** the first cut of the
+queue ordered the flush by a `clientTs`-indexed IndexedDB index. Two
+events queued in the same millisecond (e.g. rapid-fire location updates)
+got an identical `clientTs`, and IndexedDB then broke the tie by sorting
+on the primary key — a random UUID — silently scrambling flush order.
+Fixed by switching the store to an out-of-line **auto-incrementing**
+primary key and flushing in ascending key order, which is guaranteed to
+match insertion order exactly. No more clientTs-based index.
+
+**Verified:** `npx tsc --noEmit` passes clean. Wrote two throwaway Node
+smoke tests (deleted after, not committed — used `fake-indexeddb` +
+a faked `fetch`/`navigator` to exercise the logic without a browser):
+one exercising `eventQueue.ts` directly (online sync, offline queuing,
+ordered reconnect flush including the bug above, failure-then-retry
+recovery, and recovery from a genuine network exception vs. just the
+sim-offline toggle — 8 assertions, all passing), one exercising the
+route's dedup logic directly via `NextRequest` (first-submission vs.
+duplicate-id vs. a different id vs. missing `type` — 4 assertions, all
+passing).
+
+**Not verified in this sandbox** (same limitation as Phase 2 — no
+egress from this container to the services involved, this time
+`fonts.googleapis.com` for `next/font`): a real `npm run build`, and the
+actual in-browser behavior — DevTools → Network → Offline while a trip
+is running, confirming events queue and then flush in order on
+reconnect, and confirming a page reload mid-offline doesn't lose queued
+events (IndexedDB persistence across reloads was not exercised, only
+the logic within a single process run).
+
+**Where to resume:** Phase 4 (packaging — the real sync-status badge,
+docs, LICENSE, cold-start test) once Phase 3 is pushed and the live
+checks above pass on the deployed URL.
 
 ### 2026-08-24 — Claude.ai — Phase 2 complete
 Confirmed live URL working (https://pickme-ruby.vercel.app) and cloned the

@@ -301,6 +301,37 @@ button.ghost:hover {
   color: var(--danger);
 }
 
+.log-line .tag.sync {
+  color: var(--accent-2);
+}
+
+/* ---------- sync queue ---------- */
+
+.queue-counts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.queue-counts .pending {
+  color: var(--text-muted);
+}
+
+.queue-counts .pending.active {
+  color: var(--accent-2);
+}
+
+.queue-counts .synced {
+  color: var(--accent);
+}
+
+.queue-counts .divider {
+  color: var(--text-muted);
+  opacity: 0.4;
+}
+
 .cursor {
   display: inline-block;
   width: 7px;

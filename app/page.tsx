@@ -6,6 +6,16 @@ import type { TripEvent, TripMapHandle } from "@/components/TripMap";
 import TripConsole, { LogLine } from "@/components/TripConsole";
 import { PICKUP, DROPOFF } from "@/lib/tripData";
 import { downloadTilesForOffline, DownloadProgress } from "@/lib/offlineTiles";
+import {
+  enqueueEvent,
+  getSnapshot,
+  initReconnectFlush,
+  setSimulateOffline,
+  subscribeToQueue,
+  QueueSnapshot,
+} from "@/lib/eventQueue";
+
+const TRIP_ID = "demo-trip-1";
 
 const TripMap = dynamic(() => import("@/components/TripMap"), {
   ssr: false,
@@ -49,6 +59,11 @@ export default function Home() {
     total: 0,
     failed: 0,
   });
+  const [queueSnapshot, setQueueSnapshot] = useState<QueueSnapshot>({
+    pending: 0,
+    synced: 0,
+  });
+  const [offlineSim, setOfflineSim] = useState(false);
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -66,23 +81,52 @@ export default function Home() {
     []
   );
 
-  const postEvent = useCallback(async (type: string, payload: Record<string, unknown>) => {
-    try {
-      const res = await fetch("/api/trip-events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tripId: "demo-trip-1",
-          type,
-          payload,
-          clientTs: new Date().toISOString(),
-        }),
+  // Phase 3: every trip event is an optimistic write into IndexedDB first
+  // (see lib/eventQueue.ts), never a direct POST — that's what lets the
+  // demo keep recording a trip through a dropped connection. `event` on
+  // the callback fires only when *that* specific record flips to synced,
+  // so the console can show individual events landing rather than just a
+  // running total.
+  useEffect(() => {
+    getSnapshot().then(setQueueSnapshot);
+    const unsubQueue = subscribeToQueue((snapshot, event) => {
+      setQueueSnapshot(snapshot);
+      if (event?.status === "synced") {
+        pushLog("sync", `→ synced   ${event.type}  #${event.id.slice(0, 8)}`);
+      }
+    });
+    const unsubOnline = initReconnectFlush();
+    return () => {
+      unsubQueue();
+      unsubOnline();
+    };
+  }, [pushLog]);
+
+  const queueEvent = useCallback(
+    (type: string, payload: Record<string, unknown>) => {
+      enqueueEvent(TRIP_ID, type, payload).then((queued) => {
+        pushLog(
+          "req",
+          `→ queued   ${queued.type}  #${queued.id.slice(0, 8)}${
+            offlineSim ? "  (offline — will flush on reconnect)" : ""
+          }`
+        );
       });
-      return res.status;
-    } catch {
-      return null;
-    }
-  }, []);
+    },
+    [pushLog, offlineSim]
+  );
+
+  const handleToggleOffline = () => {
+    const next = !offlineSim;
+    setOfflineSim(next);
+    setSimulateOffline(next);
+    pushLog(
+      "sync",
+      next
+        ? "sim.offline ON — new events will queue locally"
+        : "sim.offline OFF — flushing queued events in order"
+    );
+  };
 
   const handleEvent = useCallback(
     (e: TripEvent) => {
@@ -98,9 +142,7 @@ export default function Home() {
         case "trip.started": {
           setPhase("running");
           pushLog("evt", "trip.started");
-          postEvent("trip.started", {}).then((status) => {
-            pushLog("req", `→ POST /api/trip-events   ${status ?? "no response"}`);
-          });
+          queueEvent("trip.started", {});
           break;
         }
         case "trip.location.update": {
@@ -108,7 +150,7 @@ export default function Home() {
             "evt",
             `trip.location.update  ${e.lat.toFixed(5)}, ${e.lng.toFixed(5)}   ${e.pct}%`
           );
-          postEvent("trip.location.update", {
+          queueEvent("trip.location.update", {
             lat: e.lat,
             lng: e.lng,
             pct: e.pct,
@@ -118,14 +160,12 @@ export default function Home() {
         case "trip.arrived": {
           setPhase("arrived");
           pushLog("evt", "trip.arrived");
-          postEvent("trip.arrived", {}).then((status) => {
-            pushLog("req", `→ POST /api/trip-events   ${status ?? "no response"}`);
-          });
+          queueEvent("trip.arrived", {});
           break;
         }
       }
     },
-    [postEvent, pushLog]
+    [queueEvent, pushLog]
   );
 
   const handleStart = () => {
@@ -275,6 +315,25 @@ export default function Home() {
                 Couldn&apos;t download tiles — check your connection and try again.
               </div>
             )}
+          </div>
+
+          <div className="control-card">
+            <h2>Sync queue</h2>
+            <div className="queue-counts">
+              <span className={queueSnapshot.pending > 0 ? "pending active" : "pending"}>
+                {queueSnapshot.pending} pending
+              </span>
+              <span className="divider">·</span>
+              <span className="synced">{queueSnapshot.synced} synced</span>
+            </div>
+            <button className="ghost" onClick={handleToggleOffline}>
+              {offlineSim ? "Go back online" : "Simulate offline"}
+            </button>
+            <div className="download-status">
+              {offlineSim
+                ? "Offline simulated — trip events queue locally and flush in order once you reconnect."
+                : "navigator.onLine can lag reality, so this toggle drives the demo instead of relying on it alone."}
+            </div>
           </div>
 
           <TripConsole lines={logs} live={isRunning} />

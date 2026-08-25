@@ -3,7 +3,7 @@
 export type LogLine = {
   id: string;
   ts: string;
-  tag: "req" | "evt" | "err";
+  tag: "req" | "evt" | "err" | "sync";
   text: string;
 };
 

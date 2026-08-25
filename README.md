@@ -1,9 +1,10 @@
-# Driftline (Track A, Phase 2)
+# Driftline (Track A, Phase 3)
 
-Trip tracking that survives the drop. Phase 2 adds installability (PWA
-manifest + icons) and offline map tiles (service worker + a manual
-"download this area" button). Phase 3 (the actual offline *trip state*
-queue) is next. See `PROGRESS.md` for full history.
+Trip tracking that survives the drop. Phase 3 adds the actual offline
+*trip state* queue: trip events write to IndexedDB first and sync to the
+server opportunistically, so a dropped connection can't lose one. Phase 4
+(packaging: the polished sync-status badge, docs, LICENSE) is next. See
+`PROGRESS.md` for full history.
 
 ## Run locally
 
@@ -12,35 +13,40 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. Click **Start trip**, and try **Download this
-area for offline use** while online.
+Open http://localhost:3000. Click **Start trip**.
 
-## Verify Phase 2's "done when" criteria
+## Verify Phase 3's "done when" criteria
 
-1. **Installable** — open Chrome DevTools → **Application → Manifest**.
-   It should show the Driftline name/icons with no errors. For the full
-   Lighthouse check: DevTools → **Lighthouse** → PWA category → Analyze.
-2. **Offline reload / offline area** — visit the page once online, click
-   **Download this area for offline use** and let it finish, then in
-   DevTools → **Network**, set throttling to **Offline** and reload. The
-   downloaded area should still render.
-3. **Clear failure, not silent** — while still offline, pan the map to an
-   area you didn't download. You should see the amber "some map tiles
-   aren't cached" banner rather than blank/broken tiles.
+1. **Events sync while online** — start a trip and watch the "Sync
+   queue" card in the sidebar. Pending should stay near 0 and synced
+   should climb as `trip.started`, location updates, and `trip.arrived`
+   fire.
+2. **Offline queues, doesn't lose events** — click **Simulate offline**,
+   then start (or continue) a trip. Events should show as queued in the
+   console and the pending count should climb; check DevTools → Network
+   → your browser's console to confirm no `/api/trip-events` requests
+   are firing while offline.
+3. **Reconnect flushes in order** — click **Go back online**. The
+   console should show `→ synced` lines in the same order the events
+   were queued, and pending should drop to 0.
+4. **A real network drop behaves the same way** — instead of the toggle,
+   use DevTools → Network → Offline while a trip is running, then set it
+   back to Online. Same result as #2/#3 — the toggle exists because
+   `navigator.onLine` alone isn't reliable enough to demo on, not because
+   it replaces a real offline test.
 
 ## Push to GitHub + deploy to Vercel
 
-Same as Phase 1 — commit and push, Vercel redeploys automatically on push
-if it's already connected to this repo:
+Same as before — commit and push, Vercel redeploys automatically:
 
 ```bash
 git add .
-git commit -m "Phase 2: PWA + offline tile caching"
+git commit -m "Phase 3: offline trip-event queue"
 git push
 ```
 
-Then update `PROGRESS.md` with confirmation the three checks above passed
-on the live URL, before starting Phase 3.
+Then update `PROGRESS.md` with confirmation the four checks above passed
+on the live URL, before starting Phase 4.
 
 ## Stack
 
@@ -49,5 +55,8 @@ on the live URL, before starting Phase 3.
   pinned for cache consistency — see `PROGRESS.md`)
 - Hand-rolled service worker (`public/sw.js`) — cache-first tiles,
   stale-while-revalidate app shell
-- `/api/trip-events` is still a stub — no persistence until Phase 3
+- `idb` for the offline event queue (`lib/eventQueue.ts`) — optimistic
+  IndexedDB write, ordered flush on reconnect, idempotency-keyed against
+  `/api/trip-events`
+- `/api/trip-events` now dedupes by idempotency key (in-memory, demo-grade)
 
