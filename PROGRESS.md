@@ -100,3 +100,11 @@ deliberately "boring plumbing only."
 - Vercel deployment live: https://pickme-ruby.vercel.app
 - Build passed on Vercel with no errors
 - Ready for Phase 2 (PWA + tile caching)
+
+### 2026-08-25 — Phase 2 deployed
+- Vercel deployment updated: https://pickme-ruby.vercel.app
+- Phase 2 (PWA + offline tile caching) live
+- All three verification criteria need manual check on live URL:
+  1. Application → Manifest shows Driftline with icons (no errors)
+  2. Download area → go offline → map still renders downloaded tiles
+  3. Pan to uncached area offline → amber "some tiles aren't cached" banner shows
