@@ -175,3 +175,12 @@ deliberately "boring plumbing only."
   1. Application → Manifest shows Driftline with icons (no errors)
   2. Download area → go offline → map still renders downloaded tiles
   3. Pan to uncached area offline → amber "some tiles aren't cached" banner shows
+
+### 2026-08-25 — Phase 3 deployed
+- Vercel deployment updated: https://pickme-ruby.vercel.app
+- Phase 3 (offline trip-event queue) live
+- Four verification criteria need manual check on live URL:
+  1. Events sync while online — start trip, pending stays ~0, synced climbs
+  2. Offline queues — click "Simulate offline", start trip, events queue locally
+  3. Reconnect flushes in order — click "Go back online", events sync in order
+  4. Real network drop behaves same — DevTools Network → Offline, then Online
