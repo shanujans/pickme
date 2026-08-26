@@ -14,14 +14,19 @@ export const DROPOFF: LatLng & { label: string } = {
   label: "Negombo Clock Tower",
 };
 
-// Two waypoints pulled slightly off the straight line so the mock route
-// reads as "a road" rather than "a ruler." Deterministic, not a real
-// routing engine — good enough for a demo, and cheap to swap for a real
-// directions API later.
-const WAYPOINTS: LatLng[] = [
+// --- Fallback route (no network, no routing engine) -------------------
+// Hand-picked waypoints pulled off the straight line so the curve reads
+// as "a road" rather than "a ruler." This is a LAST-RESORT fallback only
+// — used if the live routing call below fails or is unreachable — not
+// the route shown in normal operation. It's still just a smooth curve
+// through guessed points, not snapped to any real street or coastline,
+// so it can still visually clip a land/water boundary in principle. Not
+// hand-tuned further than one nudge below, since the real fix is the
+// live routing call, not a better guess.
+const FALLBACK_WAYPOINTS: LatLng[] = [
   { lat: 7.2201, lng: 79.8317 },
-  { lat: 7.2168, lng: 79.8302 },
-  { lat: 7.2131, lng: 79.8321 },
+  { lat: 7.2168, lng: 79.8322 }, // was 79.8302 — bowed out over the lagoon to the west
+  { lat: 7.2131, lng: 79.8331 },
   { lat: 7.2104, lng: 79.8358 },
   { lat: 7.2085, lng: 79.838 },
 ];
@@ -70,11 +75,40 @@ function catmullRom(points: LatLng[], stepsPerSegment: number): LatLng[] {
   return result;
 }
 
-export const ROUTE_PATH: LatLng[] = catmullRom(WAYPOINTS, 10);
+export const FALLBACK_ROUTE_PATH: LatLng[] = catmullRom(FALLBACK_WAYPOINTS, 10);
 
-export function routeCenter(): LatLng {
-  const mid = ROUTE_PATH[Math.floor(ROUTE_PATH.length / 2)];
-  return mid;
+// --- Live route (real roads, via OSRM's free public demo server) ------
+// No API key needed. This is OSRM's shared public demo instance — fine
+// for a prototype/pitch at low volume, explicitly NOT meant for
+// production traffic per OSRM's own usage policy
+// (https://operations.osmfoundation.org/policies/routing/). A
+// self-hosted or paid OSRM/Mapbox/Google instance is the real-
+// integration path if this ever needs to run at real scale. Always
+// falls back to FALLBACK_ROUTE_PATH above rather than failing the demo.
+const OSRM_URL =
+  `https://router.project-osrm.org/route/v1/driving/` +
+  `${PICKUP.lng},${PICKUP.lat};${DROPOFF.lng},${DROPOFF.lat}` +
+  `?overview=full&geometries=geojson`;
+
+export async function fetchLiveRoute(): Promise<LatLng[] | null> {
+  try {
+    const res = await fetch(OSRM_URL);
+    if (!res.ok) return null;
+    const data = await res.json();
+    // OSRM's own contract: a non-"Ok" `code` (NoRoute, NoSegment, etc.)
+    // can still come back with HTTP 200, so check both.
+    if (data?.code !== "Ok") return null;
+    const coords = data?.routes?.[0]?.geometry?.coordinates;
+    if (!Array.isArray(coords) || coords.length < 2) return null;
+    // GeoJSON coordinates are [lng, lat] — flip to this app's {lat, lng}.
+    return coords.map(([lng, lat]: [number, number]) => ({ lat, lng }));
+  } catch {
+    return null; // offline, CORS hiccup, demo server rate-limited, etc.
+  }
+}
+
+export function routeCenter(path: LatLng[]): LatLng {
+  return path[Math.floor(path.length / 2)];
 }
 
 export function distanceMeters(a: LatLng, b: LatLng): number {
@@ -89,10 +123,10 @@ export function distanceMeters(a: LatLng, b: LatLng): number {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-export function routeLengthMeters(): number {
+export function routeLengthMeters(path: LatLng[]): number {
   let total = 0;
-  for (let i = 1; i < ROUTE_PATH.length; i++) {
-    total += distanceMeters(ROUTE_PATH[i - 1], ROUTE_PATH[i]);
+  for (let i = 1; i < path.length; i++) {
+    total += distanceMeters(path[i - 1], path[i]);
   }
   return total;
 }

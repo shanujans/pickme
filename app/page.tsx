@@ -163,6 +163,15 @@ export default function Home() {
           queueEvent("trip.arrived", {});
           break;
         }
+        case "route.ready": {
+          pushLog(
+            "sync",
+            e.live
+              ? `route.ready   live road route via OSRM (${e.points} pts)`
+              : `route.ready   fallback curve (${e.points} pts) — live routing unavailable`
+          );
+          break;
+        }
       }
     },
     [queueEvent, pushLog]

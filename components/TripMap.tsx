@@ -9,13 +9,15 @@ import {
 } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, Tooltip } from "react-leaflet";
 import L from "leaflet";
-import { PICKUP, DROPOFF, ROUTE_PATH, routeCenter } from "@/lib/tripData";
+import { PICKUP, DROPOFF, FALLBACK_ROUTE_PATH, fetchLiveRoute, routeCenter } from "@/lib/tripData";
+import type { LatLng } from "@/lib/tripData";
 
 export type TripEvent =
   | { type: "trip.requested" }
   | { type: "trip.started" }
   | { type: "trip.location.update"; lat: number; lng: number; pct: number }
-  | { type: "trip.arrived" };
+  | { type: "trip.arrived" }
+  | { type: "route.ready"; live: boolean; points: number };
 
 export type Viewport = {
   bounds: { north: number; south: number; east: number; west: number };
@@ -65,8 +67,9 @@ const TripMap = forwardRef<
   TripMapHandle,
   { onEvent: (e: TripEvent) => void; onTileError?: () => void }
 >(function TripMap({ onEvent, onTileError }, ref) {
-    const [vehiclePos, setVehiclePos] = useState(ROUTE_PATH[0]);
-    const [drawnPath, setDrawnPath] = useState([ROUTE_PATH[0]]);
+    const [routePath, setRoutePath] = useState<LatLng[]>(FALLBACK_ROUTE_PATH);
+    const [vehiclePos, setVehiclePos] = useState(routePath[0]);
+    const [drawnPath, setDrawnPath] = useState([routePath[0]]);
     const stepRef = useRef(0);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const onEventRef = useRef(onEvent);
@@ -75,6 +78,7 @@ const TripMap = forwardRef<
     onTileErrorRef.current = onTileError;
     const mapInstanceRef = useRef<L.Map | null>(null);
     const hasRequestedRef = useRef(false);
+    const startedRef = useRef(false);
 
     useEffect(() => {
       // Guarded against React Strict Mode's dev-only mount -> cleanup ->
@@ -89,6 +93,31 @@ const TripMap = forwardRef<
       };
     }, []);
 
+    // Try to replace the illustrative fallback curve with a real,
+    // road-snapped route. Only swapped in if the trip hasn't started yet
+    // — never yank the path out from under an animation already running.
+    useEffect(() => {
+      let cancelled = false;
+      fetchLiveRoute().then((live) => {
+        if (cancelled || startedRef.current) return;
+        if (live && live.length > 1) {
+          setRoutePath(live);
+          setVehiclePos(live[0]);
+          setDrawnPath([live[0]]);
+          onEventRef.current({ type: "route.ready", live: true, points: live.length });
+        } else {
+          onEventRef.current({
+            type: "route.ready",
+            live: false,
+            points: FALLBACK_ROUTE_PATH.length,
+          });
+        }
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, []);
+
     const clearTimer = () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -99,44 +128,46 @@ const TripMap = forwardRef<
     useImperativeHandle(ref, () => ({
       start() {
         clearTimer();
+        startedRef.current = true;
         stepRef.current = 0;
-        setDrawnPath([ROUTE_PATH[0]]);
-        setVehiclePos(ROUTE_PATH[0]);
+        setDrawnPath([routePath[0]]);
+        setVehiclePos(routePath[0]);
         onEventRef.current({ type: "trip.started" });
 
         intervalRef.current = setInterval(() => {
           stepRef.current += 1;
           const i = stepRef.current;
 
-          if (i >= ROUTE_PATH.length) {
+          if (i >= routePath.length) {
             clearTimer();
-            setVehiclePos(ROUTE_PATH[ROUTE_PATH.length - 1]);
-            setDrawnPath(ROUTE_PATH);
+            setVehiclePos(routePath[routePath.length - 1]);
+            setDrawnPath(routePath);
             onEventRef.current({ type: "trip.arrived" });
             return;
           }
 
-          const point = ROUTE_PATH[i];
+          const point = routePath[i];
           setVehiclePos(point);
-          setDrawnPath(ROUTE_PATH.slice(0, i + 1));
+          setDrawnPath(routePath.slice(0, i + 1));
 
           // Sample roughly every ~5th tick so the console reads like
           // real telemetry, not a firehose.
-          if (i % 5 === 0 || i === ROUTE_PATH.length - 1) {
+          if (i % 5 === 0 || i === routePath.length - 1) {
             onEventRef.current({
               type: "trip.location.update",
               lat: point.lat,
               lng: point.lng,
-              pct: Math.round((i / (ROUTE_PATH.length - 1)) * 100),
+              pct: Math.round((i / (routePath.length - 1)) * 100),
             });
           }
         }, TICK_MS);
       },
       reset() {
         clearTimer();
+        startedRef.current = false;
         stepRef.current = 0;
-        setVehiclePos(ROUTE_PATH[0]);
-        setDrawnPath([ROUTE_PATH[0]]);
+        setVehiclePos(routePath[0]);
+        setDrawnPath([routePath[0]]);
       },
       getViewport() {
         const map = mapInstanceRef.current;
@@ -154,7 +185,7 @@ const TripMap = forwardRef<
       },
     }));
 
-    const center = routeCenter();
+    const center = routeCenter(routePath);
 
     return (
       <MapContainer
@@ -179,7 +210,7 @@ const TripMap = forwardRef<
 
         {/* faint full route, ghosted behind the animated draw-in */}
         <Polyline
-          positions={ROUTE_PATH.map((p) => [p.lat, p.lng])}
+          positions={routePath.map((p) => [p.lat, p.lng])}
           pathOptions={{ color: "#24304a", weight: 4, opacity: 0.7 }}
         />
         <Polyline
