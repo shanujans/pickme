@@ -184,3 +184,11 @@ deliberately "boring plumbing only."
   2. Offline queues — click "Simulate offline", start trip, events queue locally
   3. Reconnect flushes in order — click "Go back online", events sync in order
   4. Real network drop behaves same — DevTools Network → Offline, then Online
+
+### 2026-08-27 — Route fix deployed
+- Replaced hand-picked Catmull-Rom curve with live OSRM routing (free public API, no key)
+- `lib/tripData.ts`: added `fetchLiveRoute()` calling OSRM v5 API with proper `code: "Ok"` check
+- `components/TripMap.tsx`: stateful route, swaps fallback→live on mount only if trip not started
+- `app/page.tsx`: logs `route.ready` event showing live vs fallback
+- Fallback curve nudged slightly (less lagoon bow) but only used if OSRM fails
+- Build passes, deployed to https://pickme-ruby.vercel.app
