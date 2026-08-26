@@ -1,35 +1,55 @@
 export type LatLng = { lat: number; lng: number };
 
-// Negombo, Sri Lanka — pickup near the beach park, drop-off near the
-// clock tower / bus stand. Real place names, illustrative coordinates.
+// Negombo, Sri Lanka — pickup at Negombo Beach Park, drop-off at the
+// clock tower. Coordinates verified against Google Places (previously
+// hand-guessed "illustrative coordinates" — the guessed PICKUP was
+// ~2.2km off and landed in the lagoon; see PROGRESS.md).
 export const PICKUP: LatLng & { label: string } = {
-  lat: 7.2201,
-  lng: 79.8317,
+  lat: 7.2377502,
+  lng: 79.8401459,
   label: "Negombo Beach Park",
 };
 
 export const DROPOFF: LatLng & { label: string } = {
-  lat: 7.2085,
-  lng: 79.838,
+  lat: 7.2091944,
+  lng: 79.839905,
   label: "Negombo Clock Tower",
 };
 
 // --- Fallback route (no network, no routing engine) -------------------
-// Hand-picked waypoints pulled off the straight line so the curve reads
-// as "a road" rather than "a ruler." This is a LAST-RESORT fallback only
-// — used if the live routing call below fails or is unreachable — not
-// the route shown in normal operation. It's still just a smooth curve
-// through guessed points, not snapped to any real street or coastline,
-// so it can still visually clip a land/water boundary in principle. Not
-// hand-tuned further than one nudge below, since the real fix is the
-// live routing call, not a better guess.
-const FALLBACK_WAYPOINTS: LatLng[] = [
-  { lat: 7.2201, lng: 79.8317 },
-  { lat: 7.2168, lng: 79.8322 }, // was 79.8302 — bowed out over the lagoon to the west
-  { lat: 7.2131, lng: 79.8331 },
-  { lat: 7.2104, lng: 79.8358 },
-  { lat: 7.2085, lng: 79.838 },
-];
+// A gentle curve between PICKUP and DROPOFF so it reads as "a road"
+// rather than "a ruler" — used only if the live routing call below
+// fails or is unreachable, not the route shown in normal operation.
+// Generated FROM whatever PICKUP/DROPOFF currently are (rather than
+// hardcoded absolute waypoints) on purpose: hardcoded waypoints go
+// stale — and silently wrong — the moment either endpoint is corrected,
+// which is exactly how the previous version ended up bowing out over
+// the lagoon. This still isn't real road geometry and can still, in
+// principle, clip a land/water boundary — it's explicitly a rough
+// approximation, not a second routing engine.
+function generateFallbackWaypoints(a: LatLng, b: LatLng, segments = 4): LatLng[] {
+  const dLat = b.lat - a.lat;
+  const dLng = b.lng - a.lng;
+  const len = Math.sqrt(dLat * dLat + dLng * dLng) || 1e-9;
+  // Perpendicular unit vector to the straight line a→b.
+  const perpLat = -dLng / len;
+  const perpLng = dLat / len;
+  const bend = len * 0.12; // gentle bend, 12% of the straight-line distance
+
+  const points: LatLng[] = [a];
+  for (let i = 1; i < segments; i++) {
+    const t = i / segments;
+    const taper = Math.sin(Math.PI * t); // 0 at both ends, peaks at the midpoint
+    points.push({
+      lat: a.lat + dLat * t + perpLat * bend * taper,
+      lng: a.lng + dLng * t + perpLng * bend * taper,
+    });
+  }
+  points.push(b);
+  return points;
+}
+
+const FALLBACK_WAYPOINTS: LatLng[] = generateFallbackWaypoints(PICKUP, DROPOFF);
 
 function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t;
