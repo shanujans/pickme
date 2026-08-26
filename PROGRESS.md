@@ -192,3 +192,10 @@ deliberately "boring plumbing only."
 - `app/page.tsx`: logs `route.ready` event showing live vs fallback
 - Fallback curve nudged slightly (less lagoon bow) but only used if OSRM fails
 - Build passes, deployed to https://pickme-ruby.vercel.app
+
+### 2026-08-27 — Pickup coordinate fix deployed
+- Fixed PICKUP coordinate (was ~2.2km off, in lagoon) to verified Google Places: `7.2377502, 79.8401459` (Negombo Beach Park, 63 Porutota Rd)
+- Fixed DROPOFF to verified: `7.2091944, 79.839905` (Negombo Clock Tower)
+- Replaced hardcoded fallback waypoints with formula `generateFallbackWaypoints(PICKUP, DROPOFF)` — curve derives from endpoints, so corrections don't stale
+- Both pin marker and OSRM route now read from same corrected constants
+- Build passes, deployed to https://pickme-ruby.vercel.app
