@@ -9,7 +9,14 @@ import {
 } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, Tooltip } from "react-leaflet";
 import L from "leaflet";
-import { PICKUP, DROPOFF, FALLBACK_ROUTE_PATH, fetchLiveRoute, routeCenter } from "@/lib/tripData";
+import {
+  PICKUP,
+  DROPOFF,
+  FALLBACK_ROUTE_PATH,
+  fetchLiveRoute,
+  getCachedRoute,
+  routeCenter,
+} from "@/lib/tripData";
 import type { LatLng } from "@/lib/tripData";
 
 export type TripEvent =
@@ -17,7 +24,7 @@ export type TripEvent =
   | { type: "trip.started" }
   | { type: "trip.location.update"; lat: number; lng: number; pct: number }
   | { type: "trip.arrived" }
-  | { type: "route.ready"; live: boolean; points: number };
+  | { type: "route.ready"; source: "live" | "cached" | "fallback"; points: number };
 
 export type Viewport = {
   bounds: { north: number; south: number; east: number; west: number };
@@ -121,14 +128,26 @@ export default function TripMap({
           setRoutePath(live);
           setVehiclePos(live[0]);
           setDrawnPath([live[0]]);
-          onEventRef.current({ type: "route.ready", live: true, points: live.length });
-        } else {
-          onEventRef.current({
-            type: "route.ready",
-            live: false,
-            points: FALLBACK_ROUTE_PATH.length,
-          });
+          onEventRef.current({ type: "route.ready", source: "live", points: live.length });
+          return;
         }
+        // Live fetch failed (offline, OSRM unreachable, rate-limited,
+        // etc). Before falling back to the generated curve, check for a
+        // real route successfully fetched in an earlier session — actual
+        // road geometry beats a guessed curve whenever it's available.
+        const cached = getCachedRoute();
+        if (cached && cached.length > 1) {
+          setRoutePath(cached);
+          setVehiclePos(cached[0]);
+          setDrawnPath([cached[0]]);
+          onEventRef.current({ type: "route.ready", source: "cached", points: cached.length });
+          return;
+        }
+        onEventRef.current({
+          type: "route.ready",
+          source: "fallback",
+          points: FALLBACK_ROUTE_PATH.length,
+        });
       });
       return () => {
         cancelled = true;

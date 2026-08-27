@@ -164,12 +164,13 @@ export default function Home() {
           break;
         }
         case "route.ready": {
-          pushLog(
-            "sync",
-            e.live
-              ? `route.ready   live road route via OSRM (${e.points} pts)`
-              : `route.ready   fallback curve (${e.points} pts) — live routing unavailable`
-          );
+          const label =
+            e.source === "live"
+              ? `live road route via OSRM (${e.points} pts)`
+              : e.source === "cached"
+              ? `cached real route from an earlier session (${e.points} pts) — OSRM unreachable now`
+              : `fallback curve (${e.points} pts) — no live or cached route available`;
+          pushLog("sync", `route.ready   ${label}`);
           break;
         }
       }

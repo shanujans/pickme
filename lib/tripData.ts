@@ -104,6 +104,53 @@ function catmullRom(points: LatLng[], stepsPerSegment: number): LatLng[] {
 
 export const FALLBACK_ROUTE_PATH: LatLng[] = catmullRom(FALLBACK_WAYPOINTS, 10);
 
+// --- Cached live route (localStorage) ----------------------------------
+// The very first time OSRM succeeds, its real road geometry is cached
+// here. If a later load can't reach OSRM (genuinely offline, demo server
+// down, rate-limited), this cached REAL route is used instead of the
+// generated curve above — actual road geometry from an earlier session
+// beats an approximation every time one is available. The generated
+// curve becomes the last-resort fallback: only used if there has never
+// been a successful live fetch at all (e.g. the very first visit happens
+// to be offline).
+//
+// Keyed to the exact PICKUP/DROPOFF pair, not a fixed key, so a stale
+// cached route for a since-changed pickup/dropoff can't silently get
+// reused — this project has already hit two different bugs from stale
+// coordinates baked in too permanently (see PROGRESS.md), so this cache
+// self-invalidates by construction instead of relying on someone
+// remembering to clear it.
+function routeCacheKey(): string {
+  return `driftline:live-route:${PICKUP.lat},${PICKUP.lng}->${DROPOFF.lat},${DROPOFF.lng}`;
+}
+
+function saveCachedRoute(route: LatLng[]) {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return;
+    window.localStorage.setItem(routeCacheKey(), JSON.stringify(route));
+  } catch {
+    // Storage full, disabled, or private-browsing mode — caching is a
+    // nice-to-have on top of the generated fallback, never load-bearing.
+  }
+}
+
+export function getCachedRoute(): LatLng[] | null {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return null;
+    const raw = window.localStorage.getItem(routeCacheKey());
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length < 2) return null;
+    // Guard against a corrupted or old-format cache entry crashing the app.
+    const valid = parsed.every(
+      (p) => p && typeof p.lat === "number" && typeof p.lng === "number"
+    );
+    return valid ? (parsed as LatLng[]) : null;
+  } catch {
+    return null;
+  }
+}
+
 // --- Live route (real roads, via OSRM's free public demo server) ------
 // No API key needed. This is OSRM's shared public demo instance — fine
 // for a prototype/pitch at low volume, explicitly NOT meant for
@@ -111,7 +158,7 @@ export const FALLBACK_ROUTE_PATH: LatLng[] = catmullRom(FALLBACK_WAYPOINTS, 10);
 // (https://operations.osmfoundation.org/policies/routing/). A
 // self-hosted or paid OSRM/Mapbox/Google instance is the real-
 // integration path if this ever needs to run at real scale. Always
-// falls back to FALLBACK_ROUTE_PATH above rather than failing the demo.
+// falls back to a cached or generated route rather than failing the demo.
 const OSRM_URL =
   `https://router.project-osrm.org/route/v1/driving/` +
   `${PICKUP.lng},${PICKUP.lat};${DROPOFF.lng},${DROPOFF.lat}` +
@@ -128,7 +175,9 @@ export async function fetchLiveRoute(): Promise<LatLng[] | null> {
     const coords = data?.routes?.[0]?.geometry?.coordinates;
     if (!Array.isArray(coords) || coords.length < 2) return null;
     // GeoJSON coordinates are [lng, lat] — flip to this app's {lat, lng}.
-    return coords.map(([lng, lat]: [number, number]) => ({ lat, lng }));
+    const route = coords.map(([lng, lat]: [number, number]) => ({ lat, lng }));
+    saveCachedRoute(route);
+    return route;
   } catch {
     return null; // offline, CORS hiccup, demo server rate-limited, etc.
   }
