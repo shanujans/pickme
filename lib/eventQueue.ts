@@ -106,11 +106,18 @@ export function isSimulatingOffline() {
   return simulateOffline;
 }
 
-function isOnline(): boolean {
-  if (simulateOffline) return false;
-  if (typeof navigator === "undefined") return true;
-  return navigator.onLine;
-}
+// SKILL.md pitfall: don't trust navigator.onLine alone. The previous
+// version went further than intended — it used navigator.onLine as a
+// hard gate that blocked every flush attempt when it read `false`, even
+// though navigator.onLine is known to misreport `false` on some
+// browser/network/VPN combinations while the connection is genuinely
+// fine. That silently stuck events in "pending" forever with no error,
+// no log, nothing to debug against — exactly the failure mode the
+// pitfall warns about. The fix: the manual `simulateOffline` toggle
+// (isSimulatingOffline, above) is the only thing allowed to hold off a
+// flush attempt. Whether we're *actually* online is decided by whether
+// the fetch below succeeds or throws — the only ground truth that
+// exists — not by a browser API known to lie.
 
 async function postToServer(e: QueuedEvent): Promise<boolean> {
   const res = await fetch("/api/trip-events", {
@@ -140,7 +147,7 @@ let flushing = false;
 // requests, since IndexedDB auto-commits a transaction that goes idle
 // waiting on a non-IDB async op like fetch().
 export async function flushQueue(): Promise<void> {
-  if (flushing || !isOnline()) return;
+  if (flushing || isSimulatingOffline()) return;
   flushing = true;
 
   try {
@@ -157,7 +164,7 @@ export async function flushQueue(): Promise<void> {
     await tx.done;
 
     for (const { key, value } of entries) {
-      if (!isOnline()) break;
+      if (isSimulatingOffline()) break;
       try {
         const ok = await postToServer(value);
         if (!ok) {

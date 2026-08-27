@@ -182,11 +182,38 @@ export default function Home() {
   };
 
   const handleDownloadArea = async () => {
-    const viewport = mapRef.current?.getViewport();
-    if (!viewport) return;
+    const map = mapRef.current;
+    if (!map) {
+      pushLog("err", "download.error   map component ref not attached — try again in a moment");
+      return;
+    }
+
+    let viewport;
+    try {
+      viewport = map.getViewport();
+    } catch (err) {
+      pushLog(
+        "err",
+        `download.error   getViewport() threw: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return;
+    }
+
+    if (!viewport) {
+      pushLog(
+        "err",
+        "download.error   map viewport not ready (Leaflet instance not initialized yet) — try again in a moment"
+      );
+      return;
+    }
 
     const z = Math.round(viewport.zoom);
     const zoomLevels = [z - 1, z, z + 1].filter((zl) => zl >= 1 && zl <= 19);
+
+    pushLog(
+      "req",
+      `download.start   zoom ${zoomLevels.join("/")}   bounds [${viewport.bounds.south.toFixed(4)},${viewport.bounds.west.toFixed(4)}]→[${viewport.bounds.north.toFixed(4)},${viewport.bounds.east.toFixed(4)}]`
+    );
 
     setDownloadState("downloading");
     setDownloadProgress({ done: 0, total: 0, failed: 0 });
@@ -198,8 +225,18 @@ export default function Home() {
         setDownloadProgress
       );
       setDownloadState(result.failed > 0 && result.done === result.failed ? "error" : "done");
-    } catch {
+      pushLog(
+        "evt",
+        `download.done   ${result.done - result.failed}/${result.total} tiles cached${
+          result.failed > 0 ? `, ${result.failed} failed` : ""
+        }`
+      );
+    } catch (err) {
       setDownloadState("error");
+      pushLog(
+        "err",
+        `download.error   ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   };
 
