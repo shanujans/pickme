@@ -1,11 +1,11 @@
 "use client";
 
 import {
-  forwardRef,
   useImperativeHandle,
   useRef,
   useEffect,
   useState,
+  type Ref,
 } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, Tooltip } from "react-leaflet";
 import L from "leaflet";
@@ -63,10 +63,27 @@ function vehicleIcon() {
   });
 }
 
-const TripMap = forwardRef<
-  TripMapHandle,
-  { onEvent: (e: TripEvent) => void; onTileError?: () => void }
->(function TripMap({ onEvent, onTileError }, ref) {
+// NOT wrapped in forwardRef, and forwardedRef is a plain prop, not the
+// special `ref` prop — deliberately. next/dynamic (page.tsx wraps this
+// component with ssr:false) does not reliably forward the special `ref`
+// prop through to the loaded component, even when that component uses
+// forwardRef correctly — a long-documented Next.js limitation (see
+// vercel/next.js#4957). Regular props pass through next/dynamic just
+// fine, and useImperativeHandle doesn't care how its ref argument
+// arrived — a ref object handed down as an ordinary prop works exactly
+// the same as one received via forwardRef's second argument. This is
+// the actual fix, not a style preference: with the old forwardRef
+// version, mapRef.current in page.tsx was always null in production,
+// silently breaking "Start trip" and "Download this area" both.
+export default function TripMap({
+  onEvent,
+  onTileError,
+  forwardedRef,
+}: {
+  onEvent: (e: TripEvent) => void;
+  onTileError?: () => void;
+  forwardedRef?: Ref<TripMapHandle>;
+}) {
     const [routePath, setRoutePath] = useState<LatLng[]>(FALLBACK_ROUTE_PATH);
     const [vehiclePos, setVehiclePos] = useState(routePath[0]);
     const [drawnPath, setDrawnPath] = useState([routePath[0]]);
@@ -125,7 +142,7 @@ const TripMap = forwardRef<
       }
     };
 
-    useImperativeHandle(ref, () => ({
+    useImperativeHandle(forwardedRef, () => ({
       start() {
         clearTimer();
         startedRef.current = true;
@@ -233,7 +250,4 @@ const TripMap = forwardRef<
         <Marker position={[vehiclePos.lat, vehiclePos.lng]} icon={vehicleIcon()} />
       </MapContainer>
     );
-  }
-);
-
-export default TripMap;
+}

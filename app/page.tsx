@@ -265,7 +265,7 @@ export default function Home() {
 
       <main className="main">
         <div className="map-pane">
-          <TripMap ref={mapRef} onEvent={handleEvent} onTileError={() => setTileIssue(true)} />
+          <TripMap forwardedRef={mapRef} onEvent={handleEvent} onTileError={() => setTileIssue(true)} />
           {tileIssue && (
             <div className="tile-banner">
               Some map tiles here aren&apos;t cached for offline use. Reconnect,
