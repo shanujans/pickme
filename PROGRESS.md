@@ -199,3 +199,10 @@ deliberately "boring plumbing only."
 - Replaced hardcoded fallback waypoints with formula `generateFallbackWaypoints(PICKUP, DROPOFF)` — curve derives from endpoints, so corrections don't stale
 - Both pin marker and OSRM route now read from same corrected constants
 - Build passes, deployed to https://pickme-ruby.vercel.app
+
+### 2026-08-27 — Fallback direction fix deployed
+- Fixed fallback curve to **always nudge east** (land), not generic perpendicular (coin-flip west into lagoon)
+- `generateFallbackWaypoints()` now uses fixed `eastNudge` instead of sign-agnostic perpendicular vector
+- ~150m eastward bulge at midpoint — small, bounded, land-safe by construction for this corridor
+- Documented assumption: "east is land, west is water" holds for this Negombo coast corridor; re-check if endpoints change
+- Build passes, deployed to https://pickme-ruby.vercel.app
