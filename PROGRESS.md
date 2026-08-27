@@ -219,3 +219,12 @@ deliberately "boring plumbing only."
 - Verified: `tsc` passes, dev server starts HTTP 200, no React ref warnings.
 - Not verified in sandbox: whether `mapRef.current` populates in real browser — that's the live test.
 - Build passes, deployed to https://pickme-ruby.vercel.app
+
+### 2026-08-28 — Cached real route fix deployed
+- **Feature**: First successful OSRM fetch saves real road geometry to `localStorage`. Fallback order now: live OSRM → cached real route (from earlier session) → generated curve (last resort).
+- `lib/tripData.ts`: Added `routeCacheKey()` (keyed to exact PICKUP/DROPOFF coords — self-invalidates if coords change), `saveCachedRoute()`, `getCachedRoute()` with validation guards.
+- `components/TripMap.tsx`: `route.ready` event now reports `source: "live" | "cached" | "fallback"`.
+- `app/page.tsx`: Log shows exact source — `live road route`, `cached real route from an earlier session`, or `fallback curve`.
+- Verified: `tsc` passes, 7 smoke test assertions pass (cache empty → fetch populates → cache serves on failure → corrupt entry degrades safely).
+- Not verified in sandbox: live sequence — load online (confirm `live`), force offline (confirm `cached`, not `fallback`).
+- Build passes, deployed to https://pickme-ruby.vercel.app
