@@ -206,3 +206,9 @@ deliberately "boring plumbing only."
 - ~150m eastward bulge at midpoint — small, bounded, land-safe by construction for this corridor
 - Documented assumption: "east is land, west is water" holds for this Negombo coast corridor; re-check if endpoints change
 - Build passes, deployed to https://pickme-ruby.vercel.app
+
+### 2026-08-27 — Sync + Download fixes deployed
+- **Sync queue fix**: `flushQueue()` no longer gated on `navigator.onLine` (misreports `false` on VPN/proxy). Only manual `simulateOffline` toggle holds off flush; actual connectivity determined by fetch success/failure — the only ground truth.
+- **Download button fix**: `handleDownloadArea()` now logs every failure path (`download.error`, `download.start`, `download.done`) instead of silent early-returns. Next click will show exact cause in console.
+- Both fixes verified via smoke tests: sync flushes correctly even when `navigator.onLine === false`; manual toggle still correctly blocks flush when enabled.
+- Build passes, deployed to https://pickme-ruby.vercel.app
