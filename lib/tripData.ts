@@ -21,28 +21,35 @@ export const DROPOFF: LatLng & { label: string } = {
 // rather than "a ruler" — used only if the live routing call below
 // fails or is unreachable, not the route shown in normal operation.
 // Generated FROM whatever PICKUP/DROPOFF currently are (rather than
-// hardcoded absolute waypoints) on purpose: hardcoded waypoints go
-// stale — and silently wrong — the moment either endpoint is corrected,
-// which is exactly how the previous version ended up bowing out over
-// the lagoon. This still isn't real road geometry and can still, in
-// principle, clip a land/water boundary — it's explicitly a rough
-// approximation, not a second routing engine.
+// hardcoded absolute waypoints) so it can't go stale the way the
+// original hand-picked waypoints did.
+//
+// The bend nudges EAST only, on purpose — not a generic perpendicular
+// to the line between the two points. PICKUP and DROPOFF sit almost on
+// the same longitude (79.8401 vs 79.8399), so a sign-agnostic
+// perpendicular is essentially a coin flip between east and west here,
+// and it flipped west the first time — straight into the lagoon that
+// runs the entire length of this corridor. West is confirmed to be
+// water along this whole stretch (visually, across three live
+// screenshots), so nudging east is a deliberate, evidence-based choice
+// for THIS specific corridor, not a generic geometric assumption. If
+// PICKUP/DROPOFF are ever changed to a different city or a corridor
+// that isn't a simple north–south coast road, re-check this assumption
+// before trusting the fallback again — it still isn't real road
+// geometry, it's just biased toward the side that's reliably land here.
 function generateFallbackWaypoints(a: LatLng, b: LatLng, segments = 4): LatLng[] {
   const dLat = b.lat - a.lat;
   const dLng = b.lng - a.lng;
-  const len = Math.sqrt(dLat * dLat + dLng * dLng) || 1e-9;
-  // Perpendicular unit vector to the straight line a→b.
-  const perpLat = -dLng / len;
-  const perpLng = dLat / len;
-  const bend = len * 0.12; // gentle bend, 12% of the straight-line distance
+  const straightLineDeg = Math.sqrt(dLat * dLat + dLng * dLng) || 1e-9;
+  const eastNudge = straightLineDeg * 0.05; // ~150m at this route's length — small, land-safe
 
   const points: LatLng[] = [a];
   for (let i = 1; i < segments; i++) {
     const t = i / segments;
     const taper = Math.sin(Math.PI * t); // 0 at both ends, peaks at the midpoint
     points.push({
-      lat: a.lat + dLat * t + perpLat * bend * taper,
-      lng: a.lng + dLng * t + perpLng * bend * taper,
+      lat: a.lat + dLat * t,
+      lng: a.lng + dLng * t + eastNudge * taper,
     });
   }
   points.push(b);
