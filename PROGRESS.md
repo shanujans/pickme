@@ -212,3 +212,10 @@ deliberately "boring plumbing only."
 - **Download button fix**: `handleDownloadArea()` now logs every failure path (`download.error`, `download.start`, `download.done`) instead of silent early-returns. Next click will show exact cause in console.
 - Both fixes verified via smoke tests: sync flushes correctly even when `navigator.onLine === false`; manual toggle still correctly blocks flush when enabled.
 - Build passes, deployed to https://pickme-ruby.vercel.app
+
+### 2026-08-28 — Ref forwarding fix deployed
+- **Root cause**: `next/dynamic` (with `ssr: false`) does not forward React's special `ref` prop through to the dynamically-loaded component — even with `forwardRef`. This is a documented Next.js limitation (vercel/next.js#4957). `mapRef.current` was `null` all along, silently breaking "Start trip" and "Download this area".
+- **Fix**: `TripMap` no longer uses `forwardRef`. Takes `forwardedRef` as a plain prop; `useImperativeHandle(forwardedRef, ...)` works identically. `page.tsx` passes `forwardedRef={mapRef}` instead of `ref={mapRef}`.
+- Verified: `tsc` passes, dev server starts HTTP 200, no React ref warnings.
+- Not verified in sandbox: whether `mapRef.current` populates in real browser — that's the live test.
+- Build passes, deployed to https://pickme-ruby.vercel.app
