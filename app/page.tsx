@@ -48,6 +48,28 @@ function makeId() {
 
 type DownloadState = "idle" | "downloading" | "done" | "error";
 
+// Phase 4: the glanceable "proves the concept without reading code" badge
+// the packaging checklist calls for. Deliberately separate from the
+// detailed "Sync queue" sidebar card (Phase 3) — that card is the
+// mechanism made visible/testable; this badge is the one-glance answer
+// to "is this thing actually surviving the drop right now?" for someone
+// who never opens the sidebar. Wording is intentionally honest rather
+// than dramatic: "pending" while online just means a flush is in
+// flight or about to retry, not a guaranteed active transfer, so it
+// says "pending" rather than an unverifiable "syncing".
+type SyncTone = "synced" | "pending" | "offline";
+
+function getSyncBadge(offlineSim: boolean, pending: number): { label: string; tone: SyncTone } {
+  if (offlineSim) {
+    return pending > 0
+      ? { label: `offline — ${pending} queued`, tone: "offline" }
+      : { label: "offline (simulated)", tone: "offline" };
+  }
+  return pending > 0
+    ? { label: `pending — ${pending}`, tone: "pending" }
+    : { label: "synced", tone: "synced" };
+}
+
 export default function Home() {
   const mapRef = useRef<TripMapHandle>(null);
   const [phase, setPhase] = useState<TripPhase>("idle");
@@ -253,6 +275,7 @@ export default function Home() {
 
   const isRunning = phase === "running";
   const isArrived = phase === "arrived";
+  const syncBadge = getSyncBadge(offlineSim, queueSnapshot.pending);
 
   return (
     <div className="shell">
@@ -261,7 +284,15 @@ export default function Home() {
           <span className="dot" />
           driftline
         </div>
-        <div className="tagline">trip tracking that survives the drop</div>
+        <div className="topbar-right">
+          <div className="tagline">trip tracking that survives the drop</div>
+          {/* aria-live so the state change reads out for screen readers too,
+              not just the visible dot color */}
+          <div className={`sync-badge ${syncBadge.tone}`} aria-live="polite" title="Trip-event sync status">
+            <span className="sync-badge-dot" />
+            {syncBadge.label}
+          </div>
+        </div>
       </header>
 
       <main className="main">

@@ -4,7 +4,7 @@
 - [x] Phase 1: Foundation
 - [x] Phase 2: PWA + tile caching
 - [x] Phase 3: Offline state sync
-- [ ] Phase 4: Packaging
+- [x] Phase 4: Packaging (built — cold-start test still needs to run on a live deploy, see entry below)
 
 ## Track B — WhatsApp Voice Booking Bot
 - [ ] Phase B1: Sandbox + echo bot
@@ -14,6 +14,93 @@
 
 ## Decisions log
 (most recent first — record tool used, what was built, choices made, what's next)
+
+### 2026-08-29 — Claude.ai — Phase 4 built (packaging), cold-start test still pending on a live deploy
+
+Cloned the repo first to check state before starting — matched this file
+exactly, no drift, no reconciliation needed. Read the full Phase 3
+hardening entry below before starting, per the note in that entry that
+several of those bugs only surface in a real browser — kept that in mind
+for what still needs live verification here too, not just what to build.
+
+Built, against the packaging-for-resale checklist in SKILL.md:
+
+- **Sync-status badge** (`app/page.tsx`, `app/globals.css`): a small
+  pill in the top bar — `getSyncBadge()` derives one of `synced`,
+  `pending — N`, or `offline — N queued` from the existing
+  `queueSnapshot`/`offlineSim` state (no new state, no new subscription
+  — reuses exactly what Phase 3 already tracks). Deliberately separate
+  from the Phase 3 "Sync queue" sidebar card: that card stays as the
+  detailed mechanism view; this badge is the "glanceable, proves the
+  concept without reading code" element the checklist calls for.
+  Wording is intentionally hedged ("pending", not "syncing") since a
+  pending count while online could mean an in-flight request or a
+  stalled one waiting to retry — "syncing" would overclaim certainty
+  the client doesn't actually have. `aria-live="polite"` so the state
+  change is announced for screen readers too.
+- **`public/manifest.json`**: added the `"id"` field — one of the three
+  "richer install UI" nice-to-haves flagged (not required) in the Phase
+  3 hardening entry below. Skipped the other two on purpose: a
+  wide-form-factor install screenshot needs a real browser to capture
+  honestly (faking one would misrepresent the actual install UI), and
+  protocol handlers don't apply to anything this app does.
+- **`LICENSE`**: proprietary / all-rights-reserved, not MIT. Per
+  SKILL.md's "contract fee, not idea fee" framing and this project's
+  explicit pitch/resale intent (not a portfolio piece), the
+  licensing/resale option from the packaging checklist fits better than
+  an open license would. Owner name and contact are left as bracketed
+  placeholders — needs a human decision, not something to guess at.
+  Worth revisiting if this project's purpose ever shifts toward
+  portfolio/reputation instead.
+- **`PITCH.md`**: new one-page, non-technical pitch note, kept
+  operator-agnostic per SKILL.md (doesn't name a specific target buyer),
+  framed as "I'll build/integrate/maintain this for a fixed fee," and
+  explicit about what's real (the offline mechanism, tested live) vs.
+  what's a stand-in (the trip-dispatch backend). Deliberately a separate
+  file from the technical README rather than one document trying to
+  serve both audiences, per the checklist's "docs sized to the
+  audience" item.
+- **`README.md`**: rewritten for Phase 4 — describes the badge, adds a
+  "before sending this anywhere" checklist (fill in LICENSE
+  placeholders, decide proprietary vs. MIT, run the cold-start test),
+  and gives the exact cold-start steps below since this sandbox can't
+  run them itself.
+
+**Verified:** `npx tsc --noEmit` passes clean on all changes.
+
+**Not verified in this sandbox, same limitation as Phases 2 and 3**
+(no egress from this container to `fonts.googleapis.com`, the live tile
+server, or OSRM): a real `npm run build` — attempted, fails exactly at
+the font fetch step (`next/font/google`) with no other errors surfaced
+before that point — and the actual cold-start test the packaging
+checklist calls for. That test needs a **fresh incognito window against
+the live deployed URL**, specifically:
+1. Confirm the sync badge shows `synced` and the sidebar queue card
+   starts at `0 pending / 0 synced` on a totally clean load (no leftover
+   service worker or IndexedDB from a prior session).
+2. Download an area, force a real offline state (DevTools → Network →
+   Offline, not the sim toggle), reload, confirm the shell and cached
+   tiles still render.
+3. Start a trip while genuinely offline, confirm the badge reads
+   `offline — N queued`, reconnect, confirm it counts down to `synced`
+   in the same order events were queued.
+4. Re-run Phase 3's four sync-queue checks (listed in the 2026-08-25
+   entry below) to confirm nothing about the badge changed the
+   underlying queue behavior — it shouldn't have, since the badge only
+   reads existing state, but that's exactly the kind of assumption the
+   Phase 3 hardening round below found wrong before.
+
+**Also not done, and flagged rather than silently skipped:** filling in
+the actual name/contact in `LICENSE`, and deciding whether this stays
+proprietary or moves to MIT — both are business decisions, not
+something to default without asking.
+
+**Where to resume:** run the cold-start test above on the live URL
+(needs a browser — human or opencode, not Claude.ai), fill in the
+`LICENSE` placeholders, then this build is pitch-ready. No Track A
+phases remain after that. Track B (WhatsApp voice booking bot) hasn't
+been started — Phase B1 (sandbox + echo bot) is next if that track
+picks up.
 
 ### 2026-08-27 — Claude.ai + opencode — Phase 3 hardening (6 bugs found via live testing)
 Everything below was found by actually clicking through the live deployed app — none of it was caught by tsc, unit tests, or code review alone. Recorded here in one entry since they were found and fixed across several back-and-forth rounds in the same session. Deployed via opencode from zips handed off by Claude.ai (per the multi-tool handoff pattern above — Claude.ai has no browser access, so all live verification in this entry was done by the human + opencode, not Claude.ai itself).
